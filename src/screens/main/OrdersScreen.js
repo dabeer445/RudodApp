@@ -1,110 +1,147 @@
-// src/screens/main/OrdersScreen.js
-import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-  Button,
-  FlatList,
-} from "react-native";
-import { useAuth } from "@/src/context/AuthContext"; // Import your useAuth hook
-import { getOrders } from "@/src/services/order.service"; // Ensure you have this function implemented
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { RefreshControl } from "react-native";
+import { Box, Spinner, Center, Text, FlatList } from "@gluestack-ui/themed";
 
-const OrdersScreen = ({navigation}) => {
-  const { user } = useAuth(); // Access user from context
-  const [orders, setOrders] = useState([]); // State to hold the orders
-  const [loading, setLoading] = useState(false); // Loading state
-  const [error, setError] = useState(null); // Error state
+import { getOrders } from "@/src/services/order.service";
+import { OrderCard } from "@/src/components";
+import { useApi } from "@/src/hooks/useApi";
+
+const OrdersScreen = () => {
+  const [orders, setOrders] = useState([]);
+  const [nextPageUrl, setNextPageUrl] = useState(1);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const getOrdersApi = useApi(getOrders);
+  const mounted = useRef(true);
+  const loadingRef = useRef(false);
 
   useEffect(() => {
-    const fetchOrders = async () => {
-      if (user && user.token) {
-        // Check if user and token exist
-        setLoading(true); // Set loading state to true
-        try {
-          const response = await getOrders(user.token); // Call the order fetching API
-          setOrders(response.data.data); // Set orders in state
-        } catch (err) {
-          setError(err.message); // Set error if there's an issue
-          Alert.alert(
-            "Error fetching orders",
-            err.message || "An unknown error occurred."
-          );
-        } finally {
-          setLoading(false); // Reset loading state
-        }
-      } else {
-        Alert.alert("Unauthorized", "You need to be logged in to view orders.");
-      }
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
     };
+  }, []);
 
-    fetchOrders();
-  }, [user]);
+  const fetchOrders = useCallback(async (page=1, shouldAppend = false) => {
+    if (!mounted.current || loadingRef.current) return;
+    loadingRef.current = true;
 
-  // Render function for individual order items
-  const renderItem = ({ item }) => (
-    <View style={styles.orderCard}>
-      <Text style={styles.orderTitle}>Order ID: {item.id}</Text>
-      <Text>Status: {item.status}</Text>
-      <Text>Pickup Location: {item.pickup_location}</Text>
-      <Text>Delivery Location: {item.delivery_location}</Text>
-      <Text>Created At: {new Date(item.created_at).toLocaleDateString()}</Text>
-      <Button 
-        title="View Details"
-        onPress={() => navigation.navigate('OrderDetails', { order: item })} // Navigate to OrderDetailsScreen
-      />
-    </View>
+    try {
+      const response = await getOrdersApi.request(page);
+
+      if (!mounted.current) return;
+
+      const newOrders = response.data;
+      if (!response.links.next) {
+        setNextPageUrl(null);
+      }
+
+      const url = new URL(response.links.next);
+      const params = new URLSearchParams(url.search);
+      setNextPageUrl(params.get("page"));
+
+      if (shouldAppend) {
+        setOrders((prev) => [...prev, ...newOrders]);
+      } else {
+        setOrders(newOrders);
+      }
+    } catch (error) {
+      if (mounted.current) {
+        console.error("Error fetching orders:", error);
+      }
+    } finally {
+      if (mounted.current) {
+        loadingRef.current = false;
+      }
+    }
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    if (!mounted.current) return;
+
+    setRefreshing(true);
+    await fetchOrders(1, false);
+    setRefreshing(false);
+  }, [fetchOrders]);
+
+  const loadMore = useCallback(async () => {
+    if (isLoadingMore || !nextPageUrl || loadingRef.current) return;
+    if (!mounted.current) return;
+
+    setIsLoadingMore(true);
+    await fetchOrders(nextPageUrl, true);
+    if (mounted.current) {
+      setIsLoadingMore(false);
+    }
+  }, [nextPageUrl, isLoadingMore]);
+
+  useEffect(() => {
+    fetchOrders(1, false);
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const renderFooter = () => {
+    if (!isLoadingMore || !nextPageUrl) return null;
+
+    return (
+      <Box py="$4">
+        <Center>
+          <Spinner />
+        </Center>
+      </Box>
+    );
+  };
+
+  const renderEmpty = () => {
+    if (getOrdersApi.loading) return null;
+
+    return (
+      <Text color="$error700" textAlign="center" marginTop="$5">
+        No Orders
+      </Text>
+    );
+  };
+
+  const renderHeader = () => (
+    <Text fontSize="$2xl" marginBottom="$5">
+      Your Orders
+    </Text>
   );
+
+  const renderItem = useCallback(({ item }) => <OrderCard order={item} />, []);
+
+  if (getOrdersApi.loading && !refreshing && !isLoadingMore) {
+    return (
+      <Center flex={1}>
+        <Spinner size="large" />
+      </Center>
+    );
+  }
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Your Orders</Text>
-      {loading ? (
-        <ActivityIndicator size="large" color="#0000ff" />
-      ) : error ? (
-        <Text style={styles.errorText}>{error}</Text>
-      ) : orders.length > 0 ? (
-        <FlatList
-          data={orders}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderItem}
-          contentContainerStyle={{ paddingBottom: 20 }}
-        />
-      ) : (
-        <Text style={styles.errorText}>No Orders</Text>
-      )}
-    </View>
+    <Box flex={1} bg="$backgroundLight50">
+      <FlatList
+        data={orders}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={renderItem}
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: 20,
+        }}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmpty}
+        ListFooterComponent={renderFooter}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.3}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      />
+    </Box>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: "#fff",
-  },
-  title: {
-    fontSize: 24,
-    marginBottom: 20,
-  },
-  orderCard: {
-    padding: 16,
-    marginVertical: 8,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    backgroundColor: "#f9f9f9",
-  },
-  orderTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  errorText: {
-    color: "red",
-    textAlign: "center",
-    marginTop: 20,
-  },
-});
 
 export default OrdersScreen;

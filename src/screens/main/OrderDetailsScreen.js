@@ -1,149 +1,219 @@
-// src/screens/main/OrderDetailsScreen.js
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Button, Alert, FlatList, TextInput } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { useAuth } from '@/src/context/AuthContext';
-import { sendMessage, fetchMessages } from '@/src/services/message.service';
+import React from "react";
+import {
+  ScrollView,
+  VStack,
+  HStack,
+  Box,
+  Text,
+  Button,
+  Badge,
+  Icon,
+  Divider,
+  useToast,
+  Center,
+  Toast,
+  ToastDescription,
+  ToastTitle,
+  Spinner,
+  Pressable,
+} from "@gluestack-ui/themed";
+import { RefreshControl } from "react-native";
+import {
+  MessageSquare,
+  XCircle,
+  HelpCircleIcon,
+  CloseIcon,
+  ArrowLeft,
+} from "lucide-react";
+import { useApi } from "@/src/hooks/useApi";
+import { getOrderById, cancelOrder } from "@/src/services/order.service";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { OrderCard } from "@/src/components";
+import ChatContainer from "@/src/components/chat/ChatContainer";
 
 const OrderDetailsScreen = ({ route }) => {
-  const { user } = useAuth();
+  const { orderId } = route.params;
+  const toast = useToast();
   const navigation = useNavigation();
-  const order = route.params.order;
+  const [refreshing, setRefreshing] = React.useState(false);
 
-  const [messages, setMessages] = useState([]); // State for messages
-  const [newMessage, setNewMessage] = useState(''); // State for new message input
-  const [loadingMessages, setLoadingMessages] = useState(false); // Loading state for messages
+  // API hooks
+  const getOrderApi = useApi(getOrderById);
+  const cancelOrderApi = useApi(cancelOrder);
 
-  useEffect(() => {
-    const fetchOrderMessages = async () => {
-      if (order.id) {
-        setLoadingMessages(true);
-        try {
-          const response = await fetchMessages(order.id, user.token); // Fetch messages for the order
-          setMessages(response.data.data); // Assuming response.data contains the messages
-        } catch (error) {
-          Alert.alert('Error fetching messages', error.message || 'An error occurred while fetching messages.');
-        } finally {
-          setLoadingMessages(false);
-        }
+  const fetchData = React.useCallback(async () => {
+    if (!refreshing && !getOrderApi.loading) {
+      try {
+        await Promise.all([getOrderApi.request(orderId)]);
+      } catch (error) {
+        console.error("Error fetching order details:", error);
       }
-    };
-
-    fetchOrderMessages();
-  }, [order.id, user.token]);
-
-  const handleSendMessage = async () => {
-    if (!newMessage.trim()) {
-      Alert.alert('Invalid input', 'Please enter a message.'); // Basic validation
-      return;
     }
+  }, [refreshing, getOrderApi.loading, orderId]);
 
+  React.useEffect(() => {
+    fetchData();
+  }, []);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  }, [fetchData]);
+
+  const handleEditOrder = () => {
+    navigation.navigate("EditOrder", { orderId });
+  };
+
+  const handleCancelOrder = async () => {
     try {
-      await sendMessage(order.id, newMessage, user.token); // Send the message
-      setNewMessage(''); // Clear the input
-
-      // Optionally, fetch messages again to refresh the view
-      const response = await fetchMessages(order.id, user.token);
-      setMessages(response.data.data);
-      Alert.alert('Message Sent', 'Your message has been sent to the admin.');
+      await cancelOrderApi.request(orderId);
+      toast.show({
+        action: "success",
+        placement: "top",
+        render: ({ id, message = "Order Cancelled Succesfully!" }) => {
+          return (
+            <Toast
+              action="success"
+              variant="outline"
+              nativeID={id}
+              className="p-4 gap-6 border-success-500 w-full shadow-hard-5 max-w-[443px] flex-row justify-between"
+            >
+              <HStack space="md">
+                <Icon
+                  as={HelpCircleIcon}
+                  className="stroke-success-500 mt-0.5"
+                />
+                <VStack space="xs">
+                  <ToastTitle className="font-semibold text-success-500">
+                    Success!
+                  </ToastTitle>
+                  <ToastDescription className="text-typography-700" size="sm">
+                    <Text width="100%" overflow="ellipsis" numberOfLines={2}>
+                      {message}
+                    </Text>
+                  </ToastDescription>
+                </VStack>
+              </HStack>
+              <HStack className="min-[450px]:gap-3 gap-1">
+                <Pressable onPress={() => toast.close(id)}>
+                  <Icon as={CloseIcon} />
+                </Pressable>
+              </HStack>
+            </Toast>
+          );
+        },
+      });
+      navigation.goBack({ shouldRefresh: true });
+      // navigation.navigate('Home', { shouldRefresh: true });
     } catch (error) {
-      Alert.alert('Error', error.message || 'An error occurred while sending the message.');
+      // console.log("CCWEE", error);
+      const { response } = error;
+      console.log(response.data.message);
+      toast.show({
+        action: "error",
+        placement: "top",
+        render: ({ id, message = response.data.message }) => {
+          return (
+            <Toast
+              action="error"
+              variant="outline"
+              nativeID={id}
+              className="p-4 gap-6 border-error-500 w-full shadow-hard-5 max-w-[443px] flex-row justify-between"
+            >
+              <HStack space="md">
+                <Icon as={HelpCircleIcon} className="stroke-error-500 mt-0.5" />
+                <VStack space="xs">
+                  <ToastTitle className="font-semibold text-error-500">
+                    Error!
+                  </ToastTitle>
+                  <ToastDescription className="text-typography-700" size="sm">
+                    <Text width="100%" overflow="ellipsis" numberOfLines={2}>
+                      {message}
+                    </Text>
+                  </ToastDescription>
+                </VStack>
+              </HStack>
+              <HStack className="min-[450px]:gap-3 gap-1">
+                <Pressable onPress={() => toast.close(id)}>
+                  <Icon as={CloseIcon} />
+                </Pressable>
+              </HStack>
+            </Toast>
+          );
+        },
+      });
     }
   };
 
-  // Render function for individual message items
-  const renderMessageItem = ({ item }) => (
-    <View style={styles.messageCard}>
-      <Text style={styles.messageSender}>{item.sender.name}:</Text> {/* Access sender's name */}
-      <Text>{item.content}</Text> {/* Message content */}
-      <Text style={styles.messageTime}>
-        {new Date(item.created_at).toLocaleString()} {/* Created time of the message */}
-      </Text>
-      <Text style={styles.messageStatus}>
-        {item.is_read ? 'Read' : 'Unread'} {/* Status of the message */}
-      </Text>
-    </View>
-  );
+  if ((getOrderApi.loading && !refreshing) || !getOrderApi.data) {
+    return (
+      <Center flex={1}>
+        <Spinner size="large" />
+      </Center>
+    );
+  }
+  const order = getOrderApi.data.data;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Order ID: {order.id}</Text>
-      <Text>Status: {order.status}</Text>
-      <Text>Pickup Location: {order.pickup_location}</Text>
-      <Text>Delivery Location: {order.delivery_location}</Text>
-      <Text>Created At: {new Date(order.created_at).toLocaleString()}</Text>
+    <Box flex={1} bg="$backgroundLight50">
+      <VStack flex={1} space="md" >
+        {/* Header Section */}
+        <Box p="$4">
+          <HStack justifyContent="center" alignItems="center">
+            <Pressable
+              onPress={() => navigation.goBack()}
+              p="$2"
+              bg="$primary50"
+              rounded="$lg"
+            >
+              <ArrowLeft size={20} color="#666" />
+            </Pressable>
+            <HStack flex={1} justifyContent="center">
+              <Text fontSize="$xl" fontWeight="$bold">
+                Order #{orderId}
+              </Text>
+            </HStack>
+            <Button
+              variant="outline"
+              action="negative"
+              onPress={handleCancelOrder}
+              leftIcon={<Icon as={XCircle} />}
+              isDisabled={
+                cancelOrder.loading || (order && order.status != "pending")
+              }
+            >
+              Cancel
+            </Button>
+          </HStack>
+        </Box>
 
-      {/* Messages section */}
-      <Text style={styles.subtitle}>Messages</Text>
-      {loadingMessages ? (
-        <Text>Loading messages...</Text>
-      ) : (
-        <FlatList
-          data={messages}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderMessageItem}
-          style={styles.messageList}
-          contentContainerStyle={{ paddingBottom: 20 }}
-        />
-      )}
+        <Divider />
+        {order && (
+          <VStack flex={1}>
+            <Box p="$4">
+              <OrderCard order={order} />
+            </Box>
 
-      {/* Input for new message */}
-      <TextInput
-        style={styles.input}
-        placeholder="Type your message..."
-        value={newMessage}
-        onChangeText={setNewMessage}
-      />
-      <Button title="Send Message" onPress={handleSendMessage} />
-      <Button title="Back to Orders" onPress={() => navigation.goBack()} />
-    </View>
+            <Divider />
+
+            <Box flex={1} p="$4">
+              <HStack space="md" alignItems="center" px="$4" mb="$2">
+                <Icon as={MessageSquare} color="$primary" />
+                <Text fontSize="$lg" fontWeight="$medium">
+                  Communication
+                </Text>
+              </HStack>
+              <Box flex={1}>
+                <ChatContainer orderId={order.id} />
+              </Box>
+            </Box>
+          </VStack>
+        )}
+      </VStack>
+    </Box>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: '#fff',
-  },
-  title: {
-    fontSize: 24,
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 18,
-    marginVertical: 10,
-    fontWeight: 'bold',
-  },
-  messageList: {
-    flex: 1,
-  },
-  messageCard: {
-    padding: 12,
-    marginVertical: 8,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    backgroundColor: '#f9f9f9',
-  },
-  messageSender: {
-    fontWeight: 'bold',
-  },
-  messageTime: {
-    fontSize: 12,
-    color: '#888',
-  },
-  messageStatus: {
-    fontSize: 12,
-    color: '#888',
-  },
-  input: {
-    height: 40,
-    borderColor: 'gray',
-    borderWidth: 1,
-    marginBottom: 12,
-    paddingHorizontal: 10,
-  },
-});
 
 export default OrderDetailsScreen;

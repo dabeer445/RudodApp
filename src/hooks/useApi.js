@@ -1,25 +1,27 @@
 // src/hooks/useApi.js
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
 
-const useApi = (apiFunc) => {
+export const useApi = (apiFunc) => {
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
 
-  const execute = async (...args) => {
+  const request = useCallback(async (...args) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await apiFunc(...args);
-      setData(response.data);
+      const response = await apiFunc(...args, user?.token);
+      setData( response.data);
+      return  response.data;
     } catch (err) {
-      setError(err);
+      setError(err.response?.data?.message || 'An error occurred');
+      throw err;
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiFunc, user?.token]);
 
-  return { data, loading, error, execute };
+  return { data, error, loading, request };
 };
-
-export default useApi;

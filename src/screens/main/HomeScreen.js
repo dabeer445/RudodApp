@@ -1,125 +1,109 @@
-// src/screens/main/HomeScreen.js
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Button, FlatList } from "react-native";
-import { useAuth } from "@/src/context/AuthContext";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ScrollView, RefreshControl } from "react-native";
+import {
+  Box,
+  Text,
+  Heading,
+  VStack,
+  HStack,
+  Pressable,
+  Spinner,
+  Center,
+} from "@gluestack-ui/themed";
+import { useNavigation } from "@react-navigation/native";
+import { useApi } from "@/src/hooks/useApi";
 import { getOrders } from "@/src/services/order.service";
-import { getUnreadMessages } from "@/src/services/message.service"; // Make sure this function is implemented
+import { useAuth } from "@/src/context/AuthContext";
+import { OrderCard, MetricsSection } from "@/src/components";
 
-const HomeScreen = ({ navigation }) => {
-  const { user, handleLogout } = useAuth();
-  const [orders, setOrders] = useState([]);
-  const [unreadMessages, setUnreadMessages] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function HomeScreen() {
+  const { user } = useAuth();
+  const navigation = useNavigation();
+  const getOrdersApi = useApi(getOrders);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (!refreshing && !getOrdersApi.loading) {
       try {
-        if (user && user.token) {
-          // Fetch orders
-          const ordersResponse = await getOrders(user.token);
-          setOrders(ordersResponse.data.data); // Assuming orders are in response.data
-
-          // Fetch unread messages
-          const messagesResponse = await getUnreadMessages(user.token);
-          setUnreadMessages(messagesResponse.data.data); // Assuming messages are in response.data
-        }
+        await Promise.all([getOrdersApi.request(1)]);
       } catch (error) {
         console.error("Error fetching data:", error);
-      } finally {
-        setLoading(false);
       }
-    };
+    }
+  }, [refreshing, getOrdersApi.loading]);
 
+  useEffect(() => {
     fetchData();
-  }, [user]);
+  }, []);
 
-  const renderMessageItem = ({ item }) => (
-    <View style={styles.messageCard}>
-      <Text style={styles.messageSender}>{item.sender.name}:</Text>{" "}
-      {/* Display sender's name */}
-      <Text>{item.content}</Text>
-    </View>
-  );
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  }, [fetchData]);
 
-  const renderOrderItem = ({ item }) => (
-    <View style={styles.orderCard}>
-      <Text style={styles.orderTitle}>Order ID: {item.id}</Text>
-      <Text>Status: {item.status}</Text>
-    </View>
-  );
+  const metrics = useMemo(() => {
+    const defaultMetrics = {
+      totalOrders: 0,
+      pendingOrders: 0,
+      completedOrders: 0,
+      cancelledOrders: 0,
+    };
+    if (
+      !getOrdersApi.data ||
+      !getOrdersApi.data.data ||
+      !Array.isArray(getOrdersApi.data.data)
+    )
+      return defaultMetrics;
+    return getOrdersApi.data.data.reduce((acc, order) => {
+      acc.totalOrders++;
+      if (order.status?.toLowerCase() === "pending") acc.pendingOrders++;
+      if (order.status?.toLowerCase() === "completed") acc.completedOrders++;
+      if (order.status?.toLowerCase() === "cancelled") acc.cancelledOrders++;
+      return acc;
+    }, defaultMetrics);
+  }, [getOrdersApi.data]);
+
+  if (getOrdersApi.loading && !refreshing) {
+    return (
+      <Center flex={1}>
+        <Spinner size="large" />
+      </Center>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      {loading ? (
-        <Text>Loading...</Text>
-      ) : (
-        <>
-          <Text style={styles.title}>Welcome, {user.name}!</Text>
-          <Button
-            title="Create New Order"
-            onPress={() => navigation.navigate("CreateOrderScreen")}
-          />
-          <Button
-            title="View Orders"
-            onPress={() => navigation.navigate("OrdersScreen")}
-          />
-          <Button title="Logout" onPress={handleLogout} />
+    <ScrollView
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
+      <Box p="$4">
+        <VStack space="$4">
+          <Box>
+            <Heading size="xl">Welcome back, {user.name}!</Heading>
+            <Text color="$gray500">Here's your delivery overview</Text>
+          </Box>
 
-          <Text style={styles.subtitle}>Your Latest Orders:</Text>
-          <FlatList
-            data={orders}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={renderOrderItem}
-            contentContainerStyle={{ paddingBottom: 20 }}
-          />
+          <MetricsSection metrics={metrics} />
 
-          <Text style={styles.subtitle}>Your Latest Unread Messages:</Text>
-          <FlatList
-            data={unreadMessages}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={renderMessageItem}
-            contentContainerStyle={{ paddingBottom: 20 }}
-          />
-        </>
-      )}
-    </View>
+          <HStack justifyContent="space-between" alignItems="center">
+            <Heading size="lg">Recent Orders</Heading>
+            <Pressable onPress={() => navigation.navigate("View All Orders")}>
+              <Text color="$blue600" fontWeight="$medium">
+                View All
+              </Text>
+            </Pressable>
+          </HStack>
+
+          <VStack>
+            {getOrdersApi.data &&
+              getOrdersApi.data.data?.map((order) => (
+                <OrderCard order={order} />
+              ))}
+          </VStack>
+        </VStack>
+      </Box>
+    </ScrollView>
   );
-};
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: "#fff",
-  },
-  title: {
-    fontSize: 24,
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 18,
-    marginVertical: 10,
-    fontWeight: "bold",
-  },
-  orderCard: {
-    padding: 12,
-    marginVertical: 8,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    backgroundColor: "#f9f9f9",
-  },
-  messageCard: {
-    padding: 12,
-    marginVertical: 8,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    backgroundColor: "#e7f3ff",
-  },
-  messageSender: {
-    fontWeight: "bold",
-  },
-});
-
-export default HomeScreen;
+}
