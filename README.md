@@ -1,50 +1,185 @@
-# Welcome to your Expo app 👋
+# Shipment Tracking App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native mobile application for managing and tracking shipments. This app allows users to create orders, track shipments, and manage delivery details.
 
-## Get started
+## Features
 
-1. Install dependencies
+- 📦 Order Management
+  - Create new shipping orders
+  - View order details and status
+  - Cancel existing orders
+  - Real-time status updates
 
-   ```bash
-   npm install
-   ```
+- 💬 In-App Communication
+  - Chat functionality for each order
+  - Real-time messaging with support
+  - Message history and notifications
 
-2. Start the app
+- 🔄 Real-time Updates
+  - Live order status tracking
+  - Push notifications for status changes
+  - Automatic data refresh
 
-   ```bash
-    npx expo start
-   ```
+## Tech Stack
 
-In the output, you'll find options to open the app in a
+- **Frontend**
+  - React Native
+  - @gluestack-ui/themed for UI components
+  - Axios for API requests
+  - React Navigation for routing
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- **State Management**
+  - Custom hooks for API calls
+  - Local state management with useState
+  - Context API for global state
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Getting Started
 
-## Get a fresh project
+### Prerequisites
 
-When you're ready, run:
+- Node.js (v14 or later)
+- npm or yarn
+- React Native development environment setup
+- iOS/Android development environment
 
+### Installation
+
+1. Clone the repository
 ```bash
-npm run reset-project
+git clone [your-repo-url]
+cd [your-project-name]
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Install dependencies
+```bash
+yarn install
+# or
+npm install
+```
 
-## Learn more
+3. Install iOS dependencies (iOS only)
+```bash
+cd ios
+pod install
+cd ..
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+4. Set up environment variables
+```bash
+cp .env.example .env
+```
+Edit `.env` with your configuration:
+```
+API_URL=your_api_url
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+5. Start the application
+```bash
+# Start Metro bundler
+yarn start
 
-## Join the community
+# Run on iOS
+yarn ios
 
-Join our community of developers creating universal apps.
+# Run on Android
+yarn android
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Project Structure
+
+```
+src/
+├── components/        # Reusable components
+├── screens/          # Screen components
+├── services/         # API services
+├── hooks/            # Custom hooks
+├── navigation/       # Navigation configuration
+├── context/         # Context providers
+└── utils/           # Utility functions
+```
+
+## Key Components
+
+### OrdersScreen
+- Displays list of orders
+- Implements infinite scroll
+- Pull-to-refresh functionality
+- Order filtering and sorting
+
+### ChatContainer
+- Real-time messaging interface
+- Message history
+- File/image sharing
+- Typing indicators
+
+### Custom Hooks
+- `useApi`: Manages API calls and loading states
+- `useAuth`: Handles authentication state
+- `useOrders`: Manages order data and operations
+
+## API Integration
+
+The app integrates with a RESTful API:
+- Base URL: `http://<LARAVEL API URL>api/v1`
+- Authentication: Bearer token
+- Pagination: Link-based pagination
+
+### Key Endpoints
+
+- `/orders` - Order management
+- `/messages` - Chat functionality
+- `/auth` - Authentication
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## Development Guidelines
+
+### Code Style
+- Follow ESLint configuration
+- Use functional components
+- Implement proper TypeScript types
+- Follow component composition patterns
+
+### Testing
+- Write unit tests for utility functions
+- Write integration tests for key features
+- Use React Native Testing Library
+
+### Performance Considerations
+- Implement proper list virtualization
+- Optimize image loading
+- Minimize re-renders
+- Use proper memoization
+
+## Deployment
+
+### iOS
+1. Configure certificates in Apple Developer Portal
+2. Update version in Xcode
+3. Build and submit to App Store
+
+### Android
+1. Configure signing keys
+2. Update version in build.gradle
+3. Generate signed APK/Bundle
+4. Submit to Play Store
+
+## Troubleshooting
+
+Common issues and solutions:
+
+1. Build Errors
+   - Clear watchman: `watchman watch-del-all`
+   - Clear metro: `yarn start --reset-cache`
+   - Rebuild iOS: `cd ios && pod install && cd ..`
+
+2. Runtime Errors
+   - Check API connectivity
+   - Verify environment variables
+   - Check authentication status
