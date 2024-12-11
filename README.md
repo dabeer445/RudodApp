@@ -46,8 +46,8 @@ A React Native mobile application for managing and tracking shipments. This app 
 
 1. Clone the repository
 ```bash
-git clone [your-repo-url]
-cd [your-project-name]
+git clone https://github.com/dabeer445/RudodApp
+cd RudodApp
 ```
 
 2. Install dependencies
