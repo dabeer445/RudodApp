@@ -23,7 +23,7 @@ const OrdersScreen = () => {
     };
   }, []);
 
-  const fetchOrders = useCallback(async (page=1, shouldAppend = false) => {
+  const fetchOrders = useCallback(async (page = 1, shouldAppend = false) => {
     if (!mounted.current || loadingRef.current) return;
     loadingRef.current = true;
 
@@ -33,22 +33,25 @@ const OrdersScreen = () => {
       if (!mounted.current) return;
 
       const newOrders = response.data;
+      if (shouldAppend) {
+        setOrders((prev) => [...prev, ...newOrders]);
+      } else {
+        setOrders(newOrders);
+      }
+      
       if (!response.links.next) {
         setNextPageUrl(null);
+        return;
       }
 
       const url = new URL(response.links.next);
       const params = new URLSearchParams(url.search);
       setNextPageUrl(params.get("page"));
 
-      if (shouldAppend) {
-        setOrders((prev) => [...prev, ...newOrders]);
-      } else {
-        setOrders(newOrders);
-      }
+ 
     } catch (error) {
       if (mounted.current) {
-        console.error("Error fetching orders:", error);
+        console.error("Error fetching orders:", error, "page:", page);
       }
     } finally {
       if (mounted.current) {
@@ -68,7 +71,6 @@ const OrdersScreen = () => {
   const loadMore = useCallback(async () => {
     if (isLoadingMore || !nextPageUrl || loadingRef.current) return;
     if (!mounted.current) return;
-
     setIsLoadingMore(true);
     await fetchOrders(nextPageUrl, true);
     if (mounted.current) {

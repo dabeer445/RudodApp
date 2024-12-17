@@ -10,7 +10,7 @@ import {
   Spinner,
   Center,
 } from "@gluestack-ui/themed";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useApi } from "@/src/hooks/useApi";
 import { getOrders } from "@/src/services/order.service";
 import { useAuth } from "@/src/context/AuthContext";
@@ -18,6 +18,7 @@ import { OrderCard, MetricsSection } from "@/src/components";
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const route = useRoute();
   const navigation = useNavigation();
   const getOrdersApi = useApi(getOrders);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,6 +37,14 @@ export default function HomeScreen() {
     fetchData();
   }, []);
 
+  // Handle refresh when screen gains focus or when shouldRefresh is true
+  useEffect(() => {
+    if (route.params?.shouldRefresh) {
+      fetchData(); // Fetch fresh data
+      navigation.setParams({ shouldRefresh: false }); // Reset param to avoid redundant fetches
+    }
+  }, [route.params?.shouldRefresh, fetchData, navigation]);
+  
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchData();
@@ -43,26 +52,14 @@ export default function HomeScreen() {
   }, [fetchData]);
 
   const metrics = useMemo(() => {
-    const defaultMetrics = {
-      totalOrders: 0,
-      pendingOrders: 0,
-      completedOrders: 0,
-      cancelledOrders: 0,
+    return {
+      totalOrders: user.stats.total_orders,
+      pendingOrders: user.stats.status_counts.pending,
+      inProgessOrders: user.stats.status_counts.in_progress,
+      completedOrders: user.stats.status_counts.completed,
+      cancelledOrders: user.stats.status_counts.cancelled,
     };
-    if (
-      !getOrdersApi.data ||
-      !getOrdersApi.data.data ||
-      !Array.isArray(getOrdersApi.data.data)
-    )
-      return defaultMetrics;
-    return getOrdersApi.data.data.reduce((acc, order) => {
-      acc.totalOrders++;
-      if (order.status?.toLowerCase() === "pending") acc.pendingOrders++;
-      if (order.status?.toLowerCase() === "completed") acc.completedOrders++;
-      if (order.status?.toLowerCase() === "cancelled") acc.cancelledOrders++;
-      return acc;
-    }, defaultMetrics);
-  }, [getOrdersApi.data]);
+  }, [user]);
 
   if (getOrdersApi.loading && !refreshing) {
     return (

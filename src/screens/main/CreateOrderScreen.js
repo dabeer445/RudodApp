@@ -12,8 +12,6 @@ import {
   Textarea,
   TextareaInput,
   FormControl,
-  FormControlLabel,
-  FormControlLabelText,
   FormControlError,
   FormControlErrorText,
   Spinner,
@@ -22,15 +20,14 @@ import {
   Toast,
   ToastTitle,
 } from "@gluestack-ui/themed";
-import { MapPin, Clock, Package, ArrowLeft } from "lucide-react";
+import { MapPin, Package, ArrowLeft } from "lucide-react";
 import { useApi } from "@/src/hooks/useApi";
 import { createOrder } from "@/src/services/order.service";
 import { useNavigation } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { Formik } from "formik";
+import { DatePickerInput } from "react-native-paper-dates";
 import * as Yup from "yup";
-import { format } from "date-fns";
 
 const CreateOrderSchema = Yup.object().shape({
   pickup_location: Yup.string()
@@ -69,15 +66,7 @@ const CreateOrderScreen = () => {
   const navigation = useNavigation();
   const toast = useToast();
   const createOrderApi = useApi(createOrder);
-
-  const [showPickupDatePicker, setShowPickupDatePicker] = React.useState(false);
-  const [showDeliveryDatePicker, setShowDeliveryDatePicker] =
-    React.useState(false);
   const [apiError, setApiError] = React.useState(null);
-
-  const [pickupPickerVisible, setPickupPickerVisible] = React.useState(false);
-  const [deliveryPickerVisible, setDeliveryPickerVisible] =
-    React.useState(false);
 
   const initialValues = {
     pickup_location: "",
@@ -95,15 +84,22 @@ const CreateOrderScreen = () => {
     notes: "",
   };
 
-  const handleSubmit = async (values, { setErrors, setSubmitting }) => {
+  const handleSubmit = async (values, { setErrors, setSubmitting, resetForm }) => {
     try {
+      if (values.cargo_details.dimensions.length == "")
+        delete values.cargo_details.dimensions.length;
+      if (values.cargo_details.dimensions.width == "")
+        delete values.cargo_details.dimensions.width;
+      if (values.cargo_details.dimensions.height == "")
+        delete values.cargo_details.dimensions.height;
       await createOrderApi.request(values);
+      resetForm();
       toast.show({
         placement: "top",
         render: () => (
           <Toast action="success" variant="solid">
             <ToastTitle>Success</ToastTitle>
-            <ToastDescription>Order created successfully</ToastDescription>
+            <ToastDescription> Order created successfully</ToastDescription>
           </Toast>
         ),
       });
@@ -120,7 +116,20 @@ const CreateOrderScreen = () => {
             if (data.errors) {
               const formErrors = {};
               Object.keys(data.errors).forEach((key) => {
-                formErrors[key] = data.errors[key][0];
+                const keys = key.split("."); // Split the key into parts for nesting
+                let current = formErrors;
+
+                // Traverse or create the nested structure
+                keys.forEach((k, index) => {
+                  if (index === keys.length - 1) {
+                    // Last key in the chain, assign the error message
+                    current[k] = data.errors[key].join(", "); // Combine all messages into a single string
+                  } else {
+                    // Ensure the intermediate key exists as an object
+                    current[k] = current[k] || {};
+                    current = current[k];
+                  }
+                });
               });
               setErrors(formErrors);
             }
@@ -277,30 +286,15 @@ const CreateOrderScreen = () => {
                         isRequired
                         isInvalid={touched.pickup_time && errors.pickup_time}
                       >
-                        <Box bg="$gray50" p="$3" borderRadius="$lg">
-                          <HStack gap="$2" alignItems="center" mb="$1">
-                            <Clock size={18} color="#666" />
-                            <Text size="xs" color="$gray500">
-                              Pickup Time
-                            </Text>
-                          </HStack>
-                          <Pressable
-                            onPress={() => setPickupPickerVisible(true)}
-                          >
-                            <Text fontWeight="$medium">
-                              {format(values.pickup_time, "MMM d, h:mm a")}
-                            </Text>
-                          </Pressable>
-                        </Box>
-                        <DateTimePickerModal
-                          isVisible={pickupPickerVisible}
-                          mode="datetime"
-                          onConfirm={(date) => {
-                            setFieldValue("pickup_time", date);
-                            setPickupPickerVisible(false);
-                          }}
-                          onCancel={() => setPickupPickerVisible(false)}
-                          minimumDate={new Date()}
+                        <DatePickerInput
+                          style={{ backgroundColor: "white", color: "black" }}
+                          locale="en"
+                          label="Pickup Date"
+                          value={values.pickup_time}
+                          onChange={(d) => setFieldValue("pickup_time", d)}
+                          inputMode="end"
+                          validRange={{ startDate: new Date() }}
+                          mode="flat"
                         />
                         <FormControlError>
                           <FormControlErrorText fontSize="$xs">
@@ -317,30 +311,15 @@ const CreateOrderScreen = () => {
                           touched.delivery_time && errors.delivery_time
                         }
                       >
-                        <Box bg="$gray50" p="$3" borderRadius="$lg">
-                          <HStack gap="$2" alignItems="center" mb="$1">
-                            <Clock size={18} color="#666" />
-                            <Text size="xs" color="$gray500">
-                              Delivery Time
-                            </Text>
-                          </HStack>
-                          <Pressable
-                            onPress={() => setDeliveryPickerVisible(true)}
-                          >
-                            <Text fontWeight="$medium">
-                              {format(values.delivery_time, "MMM d, h:mm a")}
-                            </Text>
-                          </Pressable>
-                        </Box>
-                        <DateTimePickerModal
-                          isVisible={deliveryPickerVisible}
-                          mode="datetime"
-                          onConfirm={(date) => {
-                            setFieldValue("delivery_time", date);
-                            setDeliveryPickerVisible(false);
-                          }}
-                          onCancel={() => setDeliveryPickerVisible(false)}
-                          minimumDate={values.pickup_time}
+                        <DatePickerInput
+                          style={{ backgroundColor: "white", color: "black" }}
+                          locale="en"
+                          label="Delivery Date"
+                          validRange={{ startDate: values.pickup_time }}
+                          value={values.delivery_time}
+                          onChange={(d) => setFieldValue("delivery_time", d)}
+                          inputMode="end"
+                          mode="flat"
                         />
                         <FormControlError>
                           <FormControlErrorText fontSize="$xs">
@@ -352,16 +331,22 @@ const CreateOrderScreen = () => {
 
                     {/* Cargo Details */}
                     <Box width="100%" px="$2" pb="$2">
-                      <FormControl isRequired>
-                        <Box bg="$gray50" p="$3" borderRadius="$lg">
-                          <HStack gap="$2" alignItems="center" mb="$2">
-                            <Package size={18} color="#666" />
-                            <Text size="xs" color="$gray500">
-                              Cargo Details
-                            </Text>
-                          </HStack>
+                      <Box bg="$gray50" p="$3" borderRadius="$lg">
+                        <HStack gap="$2" alignItems="center" mb="$2">
+                          <Package size={18} color="#666" />
+                          <Text size="xs" color="$gray500">
+                            Cargo Details
+                          </Text>
+                        </HStack>
 
-                          <VStack gap="$3">
+                        <VStack gap="$3">
+                          <FormControl
+                            isRequired
+                            isInvalid={
+                              touched.cargo_details?.weight &&
+                              errors.cargo_details?.weight
+                            }
+                          >
                             <Input
                               size="md"
                               bg="white"
@@ -378,10 +363,22 @@ const CreateOrderScreen = () => {
                                 keyboardType="numeric"
                               />
                             </Input>
+                            <FormControlError>
+                              <FormControlErrorText fontSize="$xs">
+                                {errors.cargo_details?.weight}
+                              </FormControlErrorText>
+                            </FormControlError>
+                          </FormControl>
 
-                            <HStack gap="$6">
+                          <HStack gap="$6">
+                            <FormControl
+                              flex={1}
+                              isInvalid={
+                                touched.cargo_details?.dimensions?.length &&
+                                errors.cargo_details?.dimensions?.length
+                              }
+                            >
                               <Input
-                                flex={1}
                                 size="md"
                                 bg="white"
                                 borderWidth={1}
@@ -399,8 +396,21 @@ const CreateOrderScreen = () => {
                                   keyboardType="numeric"
                                 />
                               </Input>
+                              <FormControlError>
+                                <FormControlErrorText fontSize="$xs">
+                                  {errors.cargo_details?.dimensions?.length}
+                                </FormControlErrorText>
+                              </FormControlError>
+                            </FormControl>
+
+                            <FormControl
+                              flex={1}
+                              isInvalid={
+                                touched.cargo_details?.dimensions?.width &&
+                                errors.cargo_details?.dimensions?.width
+                              }
+                            >
                               <Input
-                                flex={1}
                                 size="md"
                                 bg="white"
                                 borderWidth={1}
@@ -418,8 +428,22 @@ const CreateOrderScreen = () => {
                                   keyboardType="numeric"
                                 />
                               </Input>
+                              <FormControlError>
+                                <FormControlErrorText fontSize="$xs">
+                                  {errors.cargo_details?.dimensions?.width}
+                                </FormControlErrorText>
+                              </FormControlError>
+                            </FormControl>
+
+                            <FormControl
+                              // isRequired
+                              flex={1}
+                              isInvalid={
+                                touched.cargo_details?.dimensions?.height &&
+                                errors.cargo_details?.dimensions?.height
+                              }
+                            >
                               <Input
-                                flex={1}
                                 size="md"
                                 bg="white"
                                 borderWidth={1}
@@ -437,10 +461,15 @@ const CreateOrderScreen = () => {
                                   keyboardType="numeric"
                                 />
                               </Input>
-                            </HStack>
-                          </VStack>
-                        </Box>
-                      </FormControl>
+                              <FormControlError>
+                                <FormControlErrorText fontSize="$xs">
+                                  {errors.cargo_details?.dimensions?.height}
+                                </FormControlErrorText>
+                              </FormControlError>
+                            </FormControl>
+                          </HStack>
+                        </VStack>
+                      </Box>
                     </Box>
 
                     {/* Notes */}
@@ -472,7 +501,7 @@ const CreateOrderScreen = () => {
                 <Button
                   size="lg"
                   onPress={handleSubmit}
-                  isDisabled={isSubmitting}
+                  isDisabled={isSubmitting || Object.keys(errors).length > 0}
                   bg="$primary500"
                   rounded="$lg"
                 >
